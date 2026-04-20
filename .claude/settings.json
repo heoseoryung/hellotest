@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"=== 작업 시작 전 필독 체크리스트 ===\\n1. docs/project-structure.md — 전체 src/ 및 docs/ 구조 확인\\n2. docs/domain/{관련도메인}.md — 도메인 비즈니스 명세 확인\\n3. docs/view/{관련뷰}.md — 뷰 레이아웃 명세 확인 (마이페이지 등)\\n4. .claude/rules/ — AI Rules 확인 (tech-standards, mock-architecture, doc-sync)\\n5. .claude/skills/{관련스킬}/SKILL.md — 작업 유형별 스킬 확인\\n\\n[규칙] 코드 작성 전 반드시 관련 docs 파일을 먼저 읽고 업데이트할 것 (.claude/rules/doc-sync.md — Docs First)\"}}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm info:*)",
+      "Bash(node -e ':*)",
+      "Bash(npm install:*)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(cmd /c \"tasklist /FI \\\\\"PID eq 11352\\\\\" /FO CSV /NH && tasklist /FI \\\\\"PID eq 18500\\\\\" /FO CSV /NH && tasklist /FI \\\\\"PID eq 24580\\\\\" /FO CSV /NH\")",
+      "Bash(cmd /c \"tasklist\")",
+      "Bash(cmd /c \"wmic process where ProcessId=18500 get Name,CommandLine 2>nul\")",
+      "Bash(cmd /c \"wmic process where ProcessId=11352 get Name,CommandLine 2>nul\")",
+      "Bash(powershell -Command \"Get-Process -Id 18500,11352 | Select-Object Id,Name,Path,MainWindowTitle\")",
+      "Bash(powershell -Command \"Get-WmiObject Win32_Process -Filter 'ProcessId=18500' | Select-Object CommandLine\")",
+      "Bash(powershell -Command \"Get-WmiObject Win32_Process -Filter 'ProcessId=11352' | Select-Object CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 18500,11352 -Force\")",
+      "Bash(ls -la c:/development/workspace/codes/eum_frontend/.env*)",
+      "Bash(ls *)",
+      "Bash(grep:*)"
+    ]
+  }
+}
