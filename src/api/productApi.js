@@ -52,6 +52,8 @@ export const productApi = apiSlice.injectEndpoints({
             stockQuantity: opt.stockQuantity ?? 0,
             stockStatus:   opt.stockStatus   ?? 'IN_STOCK',
           })),
+          // 배송비 안내 문구 — 상품 이미지 옆 표시용, 백엔드에서 문자열로 제공 예정
+          shippingInfo:    p.shippingInfo ?? null,
           isSubscribable:  p.isSubscribable  ?? false,
           // 배송주기 목록 — 서버에서 [{ value, label }] 형태로 내려옴
           deliveryCycles:  (p.deliveryCycles ?? []).map(c => ({

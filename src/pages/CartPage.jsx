@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   useGetCartQuery,
   useUpdateCartItemQuantityMutation,
+  useUpdateCartItemOptionMutation,
   useRemoveCartItemMutation,
   useSelectCartItemMutation,
 } from '../api/cartApi'
-import { useGetProductSummaryQuery } from '../api/productApi'
+import { useGetProductByIdQuery } from '../api/productApi'
 import { useAppDispatch } from '../hooks/useAppDispatch'
 import { useAppSelector } from '../hooks/useAppSelector'
 import {
@@ -17,9 +18,8 @@ import {
 } from '../features/cart/cartSlice'
 import Pagination from '../shared/components/Pagination'
 import Spinner from '../shared/components/Spinner'
+import { SHIPPING_FEE, SHIPPING_FREE_THRESHOLD } from '../shared/utils/constants'
 
-const SHIPPING_FREE_THRESHOLD = 50000
-const SHIPPING_FEE = 5000
 const PAGE_SIZE = 3
 
 /** productId + optionId 조합으로 고유 키 생성 */
@@ -28,11 +28,18 @@ const itemKey = (item) => `${item.productId}-${item.optionId ?? 'none'}`
 // ─── CartItemRow ──────────────────────────────────────────────────────────────
 // GET /product/frontend/{productId} 로 이름·이미지·가격·옵션명 조회
 function CartItemRow({ item, checked, onToggle, onQtyChange, onRemove, onOrder, onPriceReady }) {
-  const { data: product, isLoading } = useGetProductSummaryQuery(item.productId)
+  const { data: product, isLoading } = useGetProductByIdQuery(item.productId)
+  const [updateOption] = useUpdateCartItemOptionMutation()
 
-  const optionLabel  = product?.options?.find((o) => o.id === item.optionId)?.label ?? null
-  const unitPrice    = product?.price ?? 0
+  const selectedOption = product?.options?.find((o) => String(o.id) === String(item.optionId)) ?? null
+  const unitPrice      = (product?.price ?? 0) + (selectedOption?.extra ?? 0)
   const totalItemPrice = unitPrice * item.quantity
+
+  const handleOptionChange = (e) => {
+    const newOptionId = Number(e.target.value)
+    if (!newOptionId) return
+    updateOption({ productId: item.productId, optionId: item.optionId, newOptionId })
+  }
 
   // 부모에게 단가 × 수량 보고 (합계 계산용)
   const reportedRef = useRef(null)
@@ -79,8 +86,19 @@ function CartItemRow({ item, checked, onToggle, onQtyChange, onRemove, onOrder, 
             </button>
           </div>
 
-          {optionLabel && (
-            <p className="text-[13px] font-bold text-[#aaa]">옵션 : {optionLabel}</p>
+          {product?.options?.length > 0 && (
+            <select
+              value={String(item.optionId ?? '')}
+              onChange={handleOptionChange}
+              className="mt-1 w-full border border-[#eee] rounded-xl px-3 py-2 text-[13px] font-bold text-[#333] bg-white outline-none cursor-pointer focus:border-[#3ea76e] transition-colors"
+            >
+              <option value="">옵션 선택</option>
+              {product.options.map((opt) => (
+                <option key={opt.id} value={String(opt.id)}>
+                  {opt.label}{opt.extra > 0 ? ` (+${opt.extra.toLocaleString()}원)` : ''}
+                </option>
+              ))}
+            </select>
           )}
 
           <span className="text-[22px] font-black block tracking-tighter text-[#111] pt-2">

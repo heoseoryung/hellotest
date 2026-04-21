@@ -6,6 +6,7 @@ import { useAddWishlistItemMutation } from '../api/wishlistApi'
 import SwiffyReviewSummary from './ReviewPage'
 import Toast from '../features/components/ui/Toast'
 import Spinner from '../shared/components/Spinner'
+import { SHIPPING_FEE, SHIPPING_FREE_THRESHOLD } from '../shared/utils/constants'
 
 // ─── 이미지 슬라이더 ─────────────────────────────────────────────────────────────
 function ImageSlider({ images, isSoldOut }) {
@@ -105,7 +106,7 @@ function TabContent({ activeTab, product, setActiveTab }) {
         <div className="flex flex-col gap-8 text-[14px] text-[#555] leading-relaxed py-4">
           <div>
             <h3 className="font-black text-[#111] mb-3 text-[16px]">배송 안내</h3>
-            <p className="font-bold text-[#888]">배송 방법: 택배 / 배송비: 5,000원 (50,000원 이상 무료)</p>
+            <p className="font-bold text-[#888]">배송 방법: 택배 / 배송비: {SHIPPING_FEE.toLocaleString()}원 ({SHIPPING_FREE_THRESHOLD.toLocaleString()}원 이상 무료)</p>
             <p className="font-bold text-[#888]">배송 기간: 1일 ~ 2일 (도서산간 지역 배송 불가)</p>
           </div>
           <div>
@@ -178,7 +179,7 @@ export default function ProductDetailPage() {
 
   const validate = () => {
     let ok = true
-    if (!selectedOption && product.options?.length > 0) {
+    if (!isSubscribable && !selectedOption && product.options?.length > 0) {
       setOptionError(true)
       ok = false
     }
@@ -192,9 +193,10 @@ export default function ProductDetailPage() {
   const handleCart = async () => {
     if (!validate()) return
     try {
+      const optionId = product.options?.find(o => o.label === selectedOption)?.id ?? null
       await addCartItem({
         productId: product.id,
-        optionName: selectedOption || undefined,
+        ...(optionId !== null && { optionId }),
         quantity: qty,
       }).unwrap()
       setAlertMsg('장바구니에 담겼습니다.')
@@ -252,7 +254,10 @@ export default function ProductDetailPage() {
 
             <div className="pt-5 border-t border-[#f0f0f0]">
               <p className="text-[30px] font-black text-[#111] tracking-tight">{product.price?.toLocaleString()}원</p>
-              <p className="text-[13px] text-[#bbb] mt-1 font-bold">50,000원 이상 구매 시 무료배송 (기본 배송비 5,000원)</p>
+              {/* 배송비 안내 — 백엔드 shippingInfo 수신 전까지 constants 폴백 */}
+              <p className="text-[13px] text-[#bbb] mt-1 font-bold">
+                {product.shippingInfo ?? `${SHIPPING_FREE_THRESHOLD.toLocaleString()}원 이상 구매 시 무료배송 (기본 배송비 ${SHIPPING_FEE.toLocaleString()}원)`}
+              </p>
             </div>
 
 
@@ -273,7 +278,7 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {product.options?.length > 0 && (
+            {!isSubscribable && product.options?.length > 0 && (
               <div className="space-y-2">
                 <p className="text-[14px] font-bold text-[#555]">옵션 선택</p>
                 <select
@@ -292,13 +297,22 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {!isSubscribable && selectedOption && (
-              <div className="flex items-center gap-4">
-                <p className="text-[14px] font-bold text-[#555]">수량</p>
-                <div className="flex items-center rounded-full overflow-hidden border border-[#eee] bg-[#f8f8f8] px-2">
-                  <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-9 h-9 flex items-center justify-center font-bold text-[#aaa] hover:text-[#111] bg-transparent border-none cursor-pointer text-lg">－</button>
-                  <span className="w-10 text-center text-[14px] font-black text-[#111]">{qty}</span>
-                  <button onClick={() => setQty(q => q + 1)} className="w-9 h-9 flex items-center justify-center font-bold text-[#aaa] hover:text-[#111] bg-transparent border-none cursor-pointer text-lg">＋</button>
+            {!isSubscribable && (selectedOption || !product.options?.length) && (
+              <div className="bg-[#f9f9f9] rounded-2xl p-4 border border-[#eee]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-black text-[#111] truncate">
+                      {product.name}{selectedOption ? ` / ${selectedOption}` : ''}
+                    </p>
+                    <p className="text-[13px] font-bold text-[#3ea76e] mt-0.5">
+                      {((product.price + optionExtra) * qty).toLocaleString()}원
+                    </p>
+                  </div>
+                  <div className="flex items-center rounded-full overflow-hidden border border-[#ddd] bg-white px-2 shrink-0">
+                    <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-9 h-9 flex items-center justify-center font-bold text-[#aaa] hover:text-[#111] bg-transparent border-none cursor-pointer text-lg">－</button>
+                    <span className="w-10 text-center text-[14px] font-black text-[#111]">{qty}</span>
+                    <button onClick={() => setQty(q => q + 1)} className="w-9 h-9 flex items-center justify-center font-bold text-[#aaa] hover:text-[#111] bg-transparent border-none cursor-pointer text-lg">＋</button>
+                  </div>
                 </div>
               </div>
             )}
@@ -321,7 +335,7 @@ export default function ProductDetailPage() {
                 disabled={isSoldOut}
                 className={`flex-1 py-4 font-black text-[15px] rounded-2xl transition-all border-none ${isSoldOut ? 'bg-[#ddd] text-[#bbb] cursor-not-allowed' : 'bg-[#3ea76e] text-white hover:bg-[#318a57] cursor-pointer'}`}
               >
-                {isSoldOut ? '품절' : '구매하기'}
+                {isSoldOut ? '품절' : '결제하기'}
               </button>
             </div>
           </div>
@@ -376,7 +390,7 @@ export default function ProductDetailPage() {
                   disabled={isSoldOut}
                   className={`flex-1 md:w-[260px] py-5 font-black text-[16px] rounded-2xl transition-all border-none ${isSoldOut ? 'bg-[#ddd] text-[#bbb] cursor-not-allowed' : 'bg-[#3ea76e] text-white hover:bg-[#318a57] cursor-pointer'}`}
                 >
-                  {isSoldOut ? '품절' : '구매하기'}
+                  {isSoldOut ? '품절' : '결제하기'}
                 </button>
               </div>
             </div>
