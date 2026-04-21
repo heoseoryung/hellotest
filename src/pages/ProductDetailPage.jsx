@@ -139,7 +139,6 @@ export default function ProductDetailPage() {
   const [relatedSelections, setRelatedSelections] = useState({})
   const [relatedOpen, setRelatedOpen] = useState(true)
 
-  const [purchaseType, setPurchaseType] = useState('regular')
   const [deliveryCycle, setDeliveryCycle] = useState('')
   const [totalQty, setTotalQty] = useState(1)
   const [includeShipping, setIncludeShipping] = useState(true)
@@ -149,7 +148,6 @@ export default function ProductDetailPage() {
     setSelectedOption('')
     setOptionError(false)
     setQty(1)
-    setPurchaseType('regular')
     setDeliveryCycle('')
     setTotalQty(1)
     setCycleError(false)
@@ -173,8 +171,7 @@ export default function ProductDetailPage() {
   if (isSubscribable) {
     const bundleOpts = product.bundleOptions ?? []
     const bundle = bundleOpts.find(b => b.qty === totalQty) ?? bundleOpts[0] ?? { price: product.price, save: 0 }
-    const discount = purchaseType === 'regular' ? (product.subscriptionDiscount ?? 0) : 0
-    totalPrice = bundle.price + optionExtra - discount
+    totalPrice = bundle.price + optionExtra
   } else {
     totalPrice = (product.price + optionExtra) * qty
   }
@@ -182,11 +179,10 @@ export default function ProductDetailPage() {
   const validate = () => {
     let ok = true
     if (!selectedOption && product.options?.length > 0) {
-      if (isSubscribable) setOptionError(true)
-      else setAlertMsg('상품 옵션을 선택해주세요.')
+      setOptionError(true)
       ok = false
     }
-    if (isSubscribable && purchaseType === 'regular' && !deliveryCycle) {
+    if (isSubscribable && !deliveryCycle) {
       setCycleError(true)
       ok = false
     }
@@ -259,41 +255,21 @@ export default function ProductDetailPage() {
               <p className="text-[13px] text-[#bbb] mt-1 font-bold">50,000원 이상 구매 시 무료배송 (기본 배송비 5,000원)</p>
             </div>
 
-            {isSubscribable && (
-              <div className="space-y-4 pt-2 border-t border-[#f0f0f0]">
-                <div className="flex items-center gap-6">
-                  <span className="text-[14px] font-bold text-[#aaa] w-16 shrink-0">구매방법</span>
-                  <div className="flex gap-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="pType" checked={purchaseType === 'regular'} onChange={() => setPurchaseType('regular')} className="w-4 h-4 accent-[#3ea76e]" />
-                      <span className={`text-[14px] font-black ${purchaseType === 'regular' ? 'text-[#111]' : 'text-[#aaa]'}`}>정기배송</span>
-                      <span className="bg-[#f0faf4] text-[#3ea76e] text-[11px] px-2 py-0.5 rounded-full font-bold border border-[#3ea76e]/20">
-                        {(product.subscriptionDiscount ?? 0).toLocaleString()}원 할인
-                      </span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="pType" checked={purchaseType === 'once'} onChange={() => { setPurchaseType('once'); setCycleError(false) }} className="w-4 h-4 accent-[#3ea76e]" />
-                      <span className={`text-[14px] font-black ${purchaseType === 'once' ? 'text-[#111]' : 'text-[#aaa]'}`}>1회구매</span>
-                    </label>
-                  </div>
-                </div>
 
-                {purchaseType === 'regular' && (
-                  <div className="bg-[#f9f9f9] p-5 rounded-2xl border border-[#eee]">
-                    <p className="text-[13px] font-bold text-[#555] mb-3">배송주기</p>
-                    <select
-                      value={deliveryCycle}
-                      onChange={e => { setDeliveryCycle(e.target.value); setCycleError(false) }}
-                      className={`w-full bg-white border rounded-2xl px-5 py-3 text-[14px] outline-none cursor-pointer font-bold transition-colors ${cycleError ? 'border-red-400 bg-red-50' : 'border-[#eee] focus:border-[#3ea76e]'}`}
-                    >
-                      <option value="">[필수] 배송주기를 선택해 주세요.</option>
-                      <option value="1w">1주</option>
-                      <option value="2w">2주</option>
-                      <option value="1m">1개월</option>
-                    </select>
-                    {cycleError && <p className="text-red-400 text-[13px] font-bold mt-2 ml-1">배송주기를 선택해주세요.</p>}
-                  </div>
-                )}
+            {isSubscribable && (
+              <div className="space-y-2 pt-2 border-t border-[#f0f0f0]">
+                <p className="text-[14px] font-bold text-[#555]">배송주기</p>
+                <select
+                  value={deliveryCycle}
+                  onChange={e => { setDeliveryCycle(e.target.value); setCycleError(false) }}
+                  className={`w-full bg-white border rounded-2xl px-5 py-3 text-[14px] outline-none cursor-pointer font-bold transition-colors ${cycleError ? 'border-red-400 bg-red-50' : 'border-[#eee] focus:border-[#3ea76e]'}`}
+                >
+                  <option value="">[필수] 배송주기를 선택해 주세요.</option>
+                  {(product.deliveryCycles ?? []).map(cycle => (
+                    <option key={cycle.value} value={cycle.value}>{cycle.label}</option>
+                  ))}
+                </select>
+                {cycleError && <p className="text-red-400 text-[13px] font-bold mt-1 ml-1">배송주기를 선택해주세요.</p>}
               </div>
             )}
 
@@ -345,9 +321,7 @@ export default function ProductDetailPage() {
                 disabled={isSoldOut}
                 className={`flex-1 py-4 font-black text-[15px] rounded-2xl transition-all border-none ${isSoldOut ? 'bg-[#ddd] text-[#bbb] cursor-not-allowed' : 'bg-[#3ea76e] text-white hover:bg-[#318a57] cursor-pointer'}`}
               >
-                {isSoldOut ? '품절' : isSubscribable
-                  ? (purchaseType === 'regular' ? '정기배송 신청하기' : '지금 바로 구매하기')
-                  : '구매하기'}
+                {isSoldOut ? '품절' : '구매하기'}
               </button>
             </div>
           </div>
@@ -402,7 +376,7 @@ export default function ProductDetailPage() {
                   disabled={isSoldOut}
                   className={`flex-1 md:w-[260px] py-5 font-black text-[16px] rounded-2xl transition-all border-none ${isSoldOut ? 'bg-[#ddd] text-[#bbb] cursor-not-allowed' : 'bg-[#3ea76e] text-white hover:bg-[#318a57] cursor-pointer'}`}
                 >
-                  {isSoldOut ? '품절' : (purchaseType === 'regular' ? '정기배송 신청하기' : '지금 바로 구매하기')}
+                  {isSoldOut ? '품절' : '구매하기'}
                 </button>
               </div>
             </div>

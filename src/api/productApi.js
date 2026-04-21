@@ -52,7 +52,12 @@ export const productApi = apiSlice.injectEndpoints({
             stockQuantity: opt.stockQuantity ?? 0,
             stockStatus:   opt.stockStatus   ?? 'IN_STOCK',
           })),
-          isSubscribable:       p.isSubscribable       ?? false,
+          isSubscribable:  p.isSubscribable  ?? false,
+          // 배송주기 목록 — 서버에서 [{ value, label }] 형태로 내려옴
+          deliveryCycles:  (p.deliveryCycles ?? []).map(c => ({
+            value: c.value ?? c.cycleValue ?? c.cycle,
+            label: c.label ?? c.cycleName  ?? c.name,
+          })),
           subscriptionDiscount: p.subscriptionDiscount ?? 0,
           bundleOptions:        p.bundleOptions        ?? [],
           relatedProducts: (p.relatedProducts ?? []).map((rp) => ({
