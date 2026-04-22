@@ -271,7 +271,7 @@ export default function CartPage() {
               onToggle={() => handleToggleItem(item)}
               onQtyChange={handleUpdateQty}
               onRemove={() => handleRemoveOne(item)}
-              onOrder={() => navigate('/checkout')}
+              onOrder={() => navigate('/checkout', { state: { finalPayment, totalProductPrice, shippingFee } })}
               onPriceReady={handlePriceReady}
             />
           ))}
@@ -314,7 +314,7 @@ export default function CartPage() {
             </div>
 
             <button
-              onClick={() => navigate('/checkout')}
+              onClick={() => navigate('/checkout', { state: { finalPayment, totalProductPrice, shippingFee } })}
               disabled={checkedIds.length === 0}
               className="h-16 w-full rounded-full bg-[#3ea76e] text-white font-black text-[17px] tracking-tight border-none cursor-pointer hover:bg-[#318a57] transition-all active:scale-[0.97] disabled:bg-[#ccc] disabled:cursor-not-allowed"
             >

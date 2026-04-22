@@ -30,7 +30,7 @@ export default function ProductTabs() {
                 key={tag.brandName}
                 onClick={() => setActiveBrand(tag.brandName)}
                 className={`hover-primary px-6 py-2.5 text-[14px] !font-medium tracking-tighter transition-all cursor-pointer ${
-                  tag.selected ? 'active shadow-sm' : ''
+                  tag.brandName === (activeBrand ?? data?.selectedBrandName) ? 'active shadow-sm' : ''
                 }`}
               >
                 {tag.tagName}

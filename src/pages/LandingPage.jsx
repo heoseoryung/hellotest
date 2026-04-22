@@ -26,7 +26,7 @@ export default function LandingPage() {
       setToast({ message: '계정 연동에 실패했습니다. 다시 시도해 주세요.', isError: true })
       setSearchParams({}, { replace: true })
     }
-  }, [])
+  }, [searchParams, setSearchParams])
 
   return (
     <>

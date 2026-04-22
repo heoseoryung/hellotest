@@ -96,6 +96,12 @@ export const orderApi = apiSlice.injectEndpoints({
       invalidatesTags: (result, error, { orderId }) => [{ type: 'Order', id: orderId }],
     }),
 
+    /** TossPayments 결제 승인 — paymentKey·orderId·amount 전송 */
+    confirmPayment: builder.mutation({
+      query: (body) => ({ url: '/payments/confirm', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Order', id: 'LIST' }],
+    }),
+
   }),
 })
 
@@ -105,4 +111,5 @@ export const {
   useCreateOrderMutation,
   useCancelOrderMutation,
   useRefundOrderMutation,
+  useConfirmPaymentMutation,
 } = orderApi

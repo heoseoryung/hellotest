@@ -90,7 +90,7 @@ export const searchApi = apiSlice.injectEndpoints({
     getHomeBestseller: builder.query({
       query: (params = {}) => ({ url: '/search/products/home-bestseller', params }),
       transformResponse: (res) => (res.data ?? []).map((item) => ({
-        id:         item.id,
+        id:         item.productId ?? item.id,
         rank:       item.rank,
         name:       item.productTitle,
         img:        item.imageUrl,
@@ -98,7 +98,7 @@ export const searchApi = apiSlice.injectEndpoints({
         score:      item.score      ?? null,
         salesCount: item.salesCount ?? 0,
         createdAt:  item.createdAt  ?? null,
-        productUrl: item.productUrl ?? `/product/detail/${item.id}`,
+        productUrl: `/product/detail/${item.productId ?? item.id}`,
       })),
       providesTags: [{ type: 'Search', id: 'HOME_BESTSELLER' }],
     }),
@@ -132,7 +132,7 @@ export const searchApi = apiSlice.injectEndpoints({
           img:        item.imageUrl,
           price:      item.price,
           brandName:  item.brandName,
-          productUrl: item.productUrl ?? `/product/detail/${item.productId}`,
+          productUrl: `/product/detail/${item.productId}`,
         })),
       }),
       providesTags: (result, error, brandName) => [

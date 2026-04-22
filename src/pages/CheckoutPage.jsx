@@ -1,29 +1,141 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronUp, Check, ChevronDown } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { ChevronLeft, ChevronUp, ChevronDown } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import AddressSearch from '@/features/user/AddressSearch'
+import useAuth from '@/features/auth/useAuth'
+import Spinner from '@/shared/components/Spinner'
+import { useGetCartQuery } from '@/api/cartApi'
+import { useGetProductByIdQuery } from '@/api/productApi'
+import { useAppSelector } from '@/hooks/useAppSelector'
+import { selectCheckedItemIds } from '@/features/cart/cartSlice'
 
+const TOSS_CLIENT_KEY = import.meta.env.VITE_TOSS_CLIENT_KEY
+
+function generateOrderId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  return Array.from({ length: 20 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
+const itemKey = (item) => `${item.productId}-${item.optionId ?? 'none'}`
+
+// ─── 주문상품 행 ───────────────────────────────────────────────────────────────
+function OrderItemRow({ item }) {
+  const { data: product, isLoading } = useGetProductByIdQuery(item.productId)
+
+  if (isLoading || !product) return (
+    <div className="flex items-center justify-center h-24">
+      <Spinner />
+    </div>
+  )
+
+  const selectedOption = product?.options?.find(o => String(o.id) === String(item.optionId)) ?? null
+  const unitPrice      = (product?.price ?? 0) + (selectedOption?.extra ?? 0)
+  const total          = unitPrice * item.quantity
+
+  return (
+    <div className="flex gap-6 items-center py-6 border-b border-[#f5f5f5] last:border-0 last:pb-0">
+      <div className="w-24 h-24 bg-[#f8f8f8] rounded-[20px] overflow-hidden border border-[#eee] shrink-0">
+        <img src={product.img} alt={product.name} className="w-full h-full object-cover" />
+      </div>
+      <div className="flex-1">
+        <h3 className="font-black text-[16px] tracking-tight text-[#111]">{product.name}</h3>
+        {selectedOption && (
+          <p className="text-[13px] font-bold text-[#bbb] mt-1">[옵션: {selectedOption.label}]</p>
+        )}
+        <div className="flex justify-between items-end mt-4">
+          <p className="text-[13px] font-bold text-[#bbb]">수량 {item.quantity}개</p>
+          <p className="font-black text-[20px] text-[#111] tracking-tighter">{total.toLocaleString()}원</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── CheckoutPage ─────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
-  const navigate = useNavigate()
-  const availableCoupons = [
-    { id: 1, title: '2026 리틀버디 할인 쿠폰' },
-    { id: 2, title: '첫 구매 감사 쿠폰' },
-  ]
-  const [addrTab, setAddrTab] = useState('direct')
-  const [payType, setPayType] = useState('recent')
-  const [paymentMethod, setPaymentMethod] = useState('bank')
-  const [isAddrOpen, setIsAddrOpen] = useState(true)
-  const [isAgreed, setIsAgreed] = useState(false)
-  const [shippingAddr, setShippingAddr] = useState({ postcode: '', baseAddress: '', extraAddress: '', addressType: '', detailAddress: '' })
+  const navigate      = useNavigate()
+  const location      = useLocation()
+  const { user }      = useAuth()
+  const checkedIds    = useAppSelector(selectCheckedItemIds)
+  const { data: cartData } = useGetCartQuery()
 
-  const paymentOptions = [
-    { id: 'bank', label: '계좌이체' },
-    { id: 'card', label: '카드결제' },
-    { id: 'npay', label: 'N Pay' },
-    { id: 'kpay', label: 'kakao pay' },
-    { id: 'toss', label: 'toss' },
-    { id: 'cash', label: '무통장입금' },
-  ]
+  // CartPage에서 navigate state로 넘어온 금액 — 없으면 장바구니로 되돌림
+  const { finalPayment = 0, totalProductPrice = 0, shippingFee = 0 } = location.state ?? {}
+
+  useEffect(() => {
+    if (!location.state) navigate('/cart', { replace: true })
+  }, []) // eslint-disable-line
+
+  const checkedItems = (cartData?.items ?? []).filter(i => checkedIds.includes(itemKey(i)))
+  const orderName    = checkedItems.length > 1
+    ? `상품 외 ${checkedItems.length - 1}건`
+    : checkedItems.length === 1
+      ? '상품 1건'
+      : '주문 상품'
+
+  const [addrTab, setAddrTab]       = useState('direct')
+  const [isAddrOpen, setIsAddrOpen] = useState(true)
+  const [shippingAddr, setShippingAddr] = useState({
+    postcode: '', baseAddress: '', extraAddress: '', addressType: '', detailAddress: '',
+  })
+
+  const [widgets, setWidgets]             = useState(null)
+  const [isWidgetReady, setIsWidgetReady] = useState(false)
+  const [isPaying, setIsPaying]           = useState(false)
+  const orderIdRef = useRef(generateOrderId())
+
+  // ── 1. TossPayments 초기화 ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user || !TOSS_CLIENT_KEY) return
+
+    loadTossPayments(TOSS_CLIENT_KEY)
+      .then(tp => setWidgets(tp.widgets({ customerKey: `user_${user.id}` })))
+      .catch(console.error)
+  }, [user])
+
+  // ── 2. 결제 UI 렌더링 ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!widgets || !finalPayment) return
+
+    async function renderWidgets() {
+      await widgets.setAmount({ currency: 'KRW', value: finalPayment })
+      await Promise.all([
+        widgets.renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' }),
+        widgets.renderAgreement({ selector: '#agreement', variantKey: 'AGREEMENT' }),
+      ])
+      setIsWidgetReady(true)
+    }
+
+    renderWidgets().catch(console.error)
+  }, [widgets, finalPayment])
+
+  // ── 결제하기 ────────────────────────────────────────────────────────────────
+  const handlePayment = async () => {
+    if (!widgets || isPaying) return
+    setIsPaying(true)
+    try {
+      await widgets.requestPayment({
+        orderId:             orderIdRef.current,
+        orderName,
+        successUrl:          window.location.origin + '/payment/success',
+        failUrl:             window.location.origin + '/payment/fail',
+        customerEmail:       user?.email        ?? undefined,
+        customerName:        user?.name         ?? undefined,
+        customerMobilePhone: user?.phone?.replace(/-/g, '') ?? undefined,
+      })
+    } catch (err) {
+      if (err?.code !== 'USER_CANCEL') console.error('결제 오류:', err)
+    } finally {
+      setIsPaying(false)
+    }
+  }
+
+  if (!TOSS_CLIENT_KEY) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#FCFBF9]">
+      <p className="text-[#888] font-bold">결제 설정이 올바르지 않습니다. (VITE_TOSS_CLIENT_KEY 누락)</p>
+    </div>
+  )
 
   return (
     <div className="w-full bg-[#FCFBF9] min-h-screen pb-24 text-[#111]">
@@ -38,6 +150,7 @@ export default function CheckoutPage() {
 
       <main className="max-w-[1200px] mx-auto mt-10 px-4 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
+        {/* ── 왼쪽 메인 영역 ────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
 
           {/* 배송지 */}
@@ -54,20 +167,16 @@ export default function CheckoutPage() {
             {isAddrOpen && (
               <div className="space-y-6">
                 <div className="flex gap-8 border-b border-[#eee]">
-                  <button
-                    onClick={() => setAddrTab('direct')}
-                    className={`pb-4 text-[14px] font-black transition-all cursor-pointer border-none bg-transparent relative ${addrTab === 'direct' ? 'text-[#3ea76e]' : 'text-[#bbb]'}`}
-                  >
-                    직접입력
-                    {addrTab === 'direct' && <span className="absolute bottom-0 left-0 w-full h-[2px] bg-[#3ea76e]" />}
-                  </button>
-                  <button
-                    onClick={() => setAddrTab('recent')}
-                    className={`pb-4 text-[14px] font-black transition-all cursor-pointer border-none bg-transparent relative ${addrTab === 'recent' ? 'text-[#3ea76e]' : 'text-[#bbb]'}`}
-                  >
-                    최근 배송지
-                    {addrTab === 'recent' && <span className="absolute bottom-0 left-0 w-full h-[2px] bg-[#3ea76e]" />}
-                  </button>
+                  {['direct', 'recent'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setAddrTab(tab)}
+                      className={`pb-4 text-[14px] font-black transition-all cursor-pointer border-none bg-transparent relative ${addrTab === tab ? 'text-[#3ea76e]' : 'text-[#bbb]'}`}
+                    >
+                      {tab === 'direct' ? '직접입력' : '최근 배송지'}
+                      {addrTab === tab && <span className="absolute bottom-0 left-0 w-full h-[2px] bg-[#3ea76e]" />}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-[100px_1fr] items-center gap-y-5">
@@ -75,7 +184,7 @@ export default function CheckoutPage() {
                   <input
                     type="text"
                     className="h-12 bg-white border border-[#eee] rounded-2xl px-5 font-bold text-[14px] outline-none focus:border-[#3ea76e] transition-all"
-                    defaultValue="최현우"
+                    placeholder="이름 입력"
                   />
 
                   <label className="text-[14px] font-bold text-[#555] self-start pt-3">주소 <span className="text-[#3ea76e]">*</span></label>
@@ -95,8 +204,8 @@ export default function CheckoutPage() {
                     <select className="w-24 h-12 bg-white border border-[#eee] rounded-2xl px-3 font-bold text-[14px] outline-none cursor-pointer">
                       <option>010</option>
                     </select>
-                    <input type="text" defaultValue="6482" className="flex-1 h-12 border border-[#eee] rounded-2xl text-center font-bold text-[14px] outline-none focus:border-[#3ea76e] transition-all" />
-                    <input type="text" defaultValue="2555" className="flex-1 h-12 border border-[#eee] rounded-2xl text-center font-bold text-[14px] outline-none focus:border-[#3ea76e] transition-all" />
+                    <input type="text" className="flex-1 h-12 border border-[#eee] rounded-2xl text-center font-bold text-[14px] outline-none focus:border-[#3ea76e] transition-all" placeholder="0000" />
+                    <input type="text" className="flex-1 h-12 border border-[#eee] rounded-2xl text-center font-bold text-[14px] outline-none focus:border-[#3ea76e] transition-all" placeholder="0000" />
                   </div>
 
                   <label className="text-[14px] font-bold text-[#555]">배송메시지</label>
@@ -117,25 +226,18 @@ export default function CheckoutPage() {
             )}
           </section>
 
-          {/* 주문상품 */}
+          {/* 주문상품 — 실제 선택된 장바구니 데이터 */}
           <section className="bg-white rounded-[32px] p-8 border border-[#eee]">
-            <h2 className="text-[18px] font-black text-center text-[#111] tracking-tight mb-8">주문상품</h2>
-            <div className="flex gap-6 items-center pb-6 border-b border-[#f5f5f5]">
-              <div className="w-24 h-24 bg-[#f8f8f8] rounded-[20px] overflow-hidden border border-[#eee] shrink-0">
-                <img src="https://swiffy.cafe24.com/web/product/medium/202412/c574e33c42600c960242e5ec86ab1d7a.png" alt="product" className="w-full h-full object-cover" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-black text-[16px] tracking-tight text-[#111]">어글어글 우유껌 50g 7종</h3>
-                <p className="text-[13px] font-bold text-[#bbb] mt-1">[옵션: 제주 베리클리 우유껌]</p>
-                <div className="flex justify-between items-end mt-4">
-                  <p className="text-[13px] font-bold text-[#bbb]">수량 2개</p>
-                  <p className="font-black text-[20px] text-[#111] tracking-tighter">22,000원</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 flex justify-between items-center">
+            <h2 className="text-[18px] font-black text-center text-[#111] tracking-tight mb-6">주문상품</h2>
+            {checkedItems.length === 0
+              ? <p className="text-center text-[#bbb] font-bold py-8">선택된 상품이 없습니다.</p>
+              : checkedItems.map(item => <OrderItemRow key={itemKey(item)} item={item} />)
+            }
+            <div className="mt-5 flex justify-between items-center pt-4 border-t border-[#f5f5f5]">
               <span className="text-[14px] font-bold text-[#bbb]">배송비</span>
-              <span className="text-[14px] font-black text-[#3ea76e]">0원 (무료배송)</span>
+              <span className="text-[14px] font-black text-[#3ea76e]">
+                {shippingFee === 0 ? '0원 (무료배송)' : `${shippingFee.toLocaleString()}원`}
+              </span>
             </div>
           </section>
 
@@ -152,10 +254,7 @@ export default function CheckoutPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center px-1">
-                  <label className="text-[13px] font-bold text-[#555]">쿠폰 할인</label>
-                  <span className="text-[13px] font-bold text-[#3ea76e]">보유쿠폰 {availableCoupons.length}개</span>
-                </div>
+                <label className="text-[13px] font-bold text-[#555]">쿠폰 할인</label>
                 <div className="flex gap-3">
                   <div className="flex-1 h-12 bg-[#f9f9f9] border border-[#eee] rounded-2xl px-5 flex items-center justify-end">
                     <span className="font-black text-[16px] text-[#111]">0원</span>
@@ -167,7 +266,6 @@ export default function CheckoutPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center px-1">
                   <label className="text-[13px] font-bold text-[#555]">적립금 사용</label>
-                  <span className="text-[13px] font-bold text-[#bbb]">보유 3,000원</span>
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-1 h-12 bg-white border border-[#eee] rounded-2xl px-5 flex items-center justify-end">
@@ -178,9 +276,26 @@ export default function CheckoutPage() {
               </div>
             </div>
           </section>
+
+          {/* 결제수단 — TossPayments 위젯 */}
+          <section className="bg-white rounded-[32px] p-8 border border-[#eee]">
+            <h2 className="text-[18px] font-black text-center text-[#111] tracking-tight mb-6">결제수단</h2>
+            {!isWidgetReady && (
+              <div className="flex items-center justify-center py-12">
+                <Spinner />
+              </div>
+            )}
+            <div id="payment-method" />
+          </section>
+
+          {/* 이용약관 — TossPayments 위젯 */}
+          <section className="bg-white rounded-[32px] p-8 border border-[#eee]">
+            <div id="agreement" />
+          </section>
+
         </div>
 
-        {/* 오른쪽 결제 요약 */}
+        {/* ── 오른쪽 결제 요약 ──────────────────────────────────────────── */}
         <div className="lg:block">
           <div className="sticky top-24 space-y-6">
 
@@ -189,11 +304,11 @@ export default function CheckoutPage() {
               <div className="space-y-4">
                 <div className="flex justify-between text-[14px] font-bold text-[#aaa]">
                   <span>총 상품금액</span>
-                  <span className="text-[#111]">22,000원</span>
+                  <span className="text-[#111]">{totalProductPrice.toLocaleString()}원</span>
                 </div>
                 <div className="flex justify-between text-[14px] font-bold text-[#aaa]">
                   <span>배송비</span>
-                  <span className="text-[#111]">+0원</span>
+                  <span className="text-[#111]">{shippingFee === 0 ? '+0원' : `+${shippingFee.toLocaleString()}원`}</span>
                 </div>
                 <div className="flex justify-between text-[14px] font-bold text-[#aaa]">
                   <span>할인/부가결제</span>
@@ -201,65 +316,20 @@ export default function CheckoutPage() {
                 </div>
                 <div className="pt-5 border-t border-dashed border-[#eee] flex justify-between items-end">
                   <span className="font-black text-[15px] text-[#111]">최종 결제 금액</span>
-                  <span className="text-[28px] font-black leading-none text-[#111] tracking-tighter">22,000원</span>
+                  <span className="text-[28px] font-black leading-none text-[#111] tracking-tighter">
+                    {finalPayment.toLocaleString()}원
+                  </span>
                 </div>
               </div>
             </section>
 
-            <section className="bg-white rounded-[32px] p-8 border border-[#eee]">
-              <h2 className="text-[16px] font-black text-center mb-6 tracking-tight">결제수단</h2>
-
-              <div className="space-y-4 mb-6">
-                <label className="flex items-center gap-3 cursor-pointer" onClick={() => setPayType('recent')}>
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${payType === 'recent' ? 'border-[#3ea76e] bg-[#3ea76e]' : 'border-[#ddd]'}`}>
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                  </div>
-                  <span className={`text-[14px] font-bold ${payType === 'recent' ? 'text-[#111]' : 'text-[#bbb]'}`}>최근 결제수단</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer" onClick={() => setPayType('other')}>
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${payType === 'other' ? 'border-[#3ea76e] bg-[#3ea76e]' : 'border-[#ddd]'}`}>
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                  </div>
-                  <span className={`text-[14px] font-bold ${payType === 'other' ? 'text-[#111]' : 'text-[#bbb]'}`}>다른 결제수단 선택</span>
-                </label>
-              </div>
-
-              <div className={`grid grid-cols-2 gap-2 mb-6 transition-opacity ${payType === 'other' ? 'opacity-100' : 'opacity-40'}`}>
-                {paymentOptions.map((o) => (
-                  <button
-                    key={o.id}
-                    disabled={payType === 'recent'}
-                    onClick={() => { setPaymentMethod(o.id); setPayType('other') }}
-                    className={`h-12 rounded-2xl text-[13px] font-bold border-2 transition-all cursor-pointer ${
-                      paymentMethod === o.id && payType === 'other'
-                        ? 'border-[#3ea76e] text-[#3ea76e] bg-[#f0faf4]'
-                        : 'border-[#f5f5f5] text-[#bbb] bg-white'
-                    }`}
-                  >{o.label}</button>
-                ))}
-              </div>
-
-              <div className="mb-6 pt-6 border-t border-[#f5f5f5]">
-                <label className="flex items-start gap-3 cursor-pointer" onClick={() => setIsAgreed(!isAgreed)}>
-                  <div className={`mt-0.5 min-w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center transition-all ${isAgreed ? 'bg-[#3ea76e] border-[#3ea76e]' : 'border-[#ddd]'}`}>
-                    {isAgreed && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
-                  </div>
-                  <div>
-                    <p className="text-[14px] font-black text-[#111] mb-1">모든 이용약관에 동의합니다.</p>
-                    <p className="text-[12px] font-bold text-[#bbb] leading-snug underline underline-offset-4 decoration-[#ddd]">
-                      전자금융거래 기본약관, 결제대행 서비스 이용약관 및 개인정보 제3자 제공 동의 (필수)
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <button
-                disabled={!isAgreed}
-                className="w-full h-16 rounded-full bg-[#3ea76e] text-white font-black text-[17px] border-none cursor-pointer transition-all hover:bg-[#318a57] active:scale-[0.97] disabled:bg-[#eee] disabled:text-[#ccc] disabled:cursor-not-allowed tracking-tight"
-              >
-                22,000원 결제하기
-              </button>
-            </section>
+            <button
+              onClick={handlePayment}
+              disabled={!isWidgetReady || isPaying || checkedItems.length === 0}
+              className="w-full h-16 rounded-full bg-[#3ea76e] text-white font-black text-[17px] border-none cursor-pointer transition-all hover:bg-[#318a57] active:scale-[0.97] disabled:bg-[#eee] disabled:text-[#ccc] disabled:cursor-not-allowed tracking-tight"
+            >
+              {isPaying ? '처리 중...' : `${finalPayment.toLocaleString()}원 결제하기`}
+            </button>
 
           </div>
         </div>

@@ -25,6 +25,8 @@ import ReviewPage from './pages/ReviewPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import SubscriptionPage from './pages/SubscriptionPage'
+import PaymentSuccessPage from './pages/PaymentSuccessPage'
+import PaymentFailPage from './pages/PaymentFailPage'
 
 export default function Router() {
   return (
@@ -60,6 +62,10 @@ export default function Router() {
 
             <Route path="*" element={<LandingPage />} />
           </Route>
+
+          {/* 결제 결과 — Layout 밖 (TossPayments Redirect 수신) */}
+          <Route path="/payment/success" element={<PaymentSuccessPage />} />
+          <Route path="/payment/fail"    element={<PaymentFailPage />} />
 
           {/* 인증 라우트 (Layout 밖) */}
           <Route path="/login" element={<LoginPage />} />

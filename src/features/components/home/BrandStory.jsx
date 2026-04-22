@@ -5,12 +5,7 @@ export default function BrandStory() {
     <Link to="/brand-story" className="block bg-white mb-4 group w-full">
       <div className="relative w-full aspect-[4/3] lg:aspect-[5/2] rounded-[28px] overflow-hidden mb-8 bg-gradient-to-br from-[#1a3d2b] via-[#256641] to-[#3ea76e]">
         {/* 배경 패턴 */}
-        <div className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: 'radial-gradient(circle at 20% 80%, #ffffff 1px, transparent 1px), radial-gradient(circle at 80% 20%, #ffffff 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
+        <div className="absolute inset-0 opacity-10 [background-image:radial-gradient(circle_at_20%_80%,_#ffffff_1px,_transparent_1px),radial-gradient(circle_at_80%_20%,_#ffffff_1px,_transparent_1px)] [background-size:40px_40px]" />
         {/* 그라데이션 오버레이 */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 

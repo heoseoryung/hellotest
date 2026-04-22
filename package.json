@@ -13,6 +13,7 @@
     "@clroot/react-kakao-postcode": "^1.0.0",
     "@reduxjs/toolkit": "^2.11.2",
     "@tailwindcss/vite": "^4.2.2",
+    "@tosspayments/tosspayments-sdk": "^2.7.0",
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

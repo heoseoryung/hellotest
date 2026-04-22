@@ -18,7 +18,7 @@ export default function BestSellers() {
       ) : (
         <div className="grid grid-cols-3 gap-10">
           {products.map((product, idx) => (
-            <Link key={product.id ?? idx} to={`/product/detail/${product.id}`} className="flex flex-col group">
+            <Link key={product.id ?? idx} to={product.productUrl} className="flex flex-col group">
               <div className="relative aspect-square overflow-hidden rounded-[24px] mb-5">
                 <img
                   src={product.img}
