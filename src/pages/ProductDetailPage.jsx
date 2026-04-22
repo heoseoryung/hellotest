@@ -196,13 +196,8 @@ export default function ProductDetailPage() {
       const optionId = product.options?.find(o => o.label === selectedOption)?.id ?? null
       await addCartItem({
         productId: product.id,
-<<<<<<< HEAD
         ...(optionId !== null && { optionId }),
         quantity: qty,
-=======
-        optionId:  product.options?.find(o => o.label === selectedOption)?.id ?? undefined,
-        quantity:  qty,
->>>>>>> 3954934a82ecdee916a27e6fc1b503bfc0ce83fa
       }).unwrap()
       setAlertMsg('장바구니에 담겼습니다.')
       setAlertNav('/cart')
@@ -223,7 +218,32 @@ export default function ProductDetailPage() {
     }
   }
 
-  const handleBuy = () => { if (validate()) navigate('/checkout') }
+  const handleBuy = () => {
+    if (!validate()) return
+
+    const optionId = product.options?.find(o => o.label === selectedOption)?.id ?? null
+    const directQuantity = isSubscribable ? totalQty : qty
+    const totalProductPrice = totalPrice
+    const shippingFee = totalProductPrice >= SHIPPING_FREE_THRESHOLD ? 0 : SHIPPING_FEE
+    const finalPayment = totalProductPrice + shippingFee
+
+    navigate('/checkout', {
+      state: {
+        source: 'product-detail',
+        directItems: [
+          {
+            productId: product.id,
+            optionId,
+            quantity: directQuantity,
+          },
+        ],
+        orderName: product.name,
+        totalProductPrice,
+        shippingFee,
+        finalPayment,
+      },
+    })
+  }
 
   return (
     <>

@@ -61,18 +61,26 @@ export default function CheckoutPage() {
   const { data: cartData } = useGetCartQuery()
 
   // CartPage에서 navigate state로 넘어온 금액 — 없으면 장바구니로 되돌림
-  const { finalPayment = 0, totalProductPrice = 0, shippingFee = 0 } = location.state ?? {}
+  const {
+    finalPayment = 0,
+    totalProductPrice = 0,
+    shippingFee = 0,
+    directItems = null,
+    orderName: directOrderName,
+  } = location.state ?? {}
 
   useEffect(() => {
     if (!location.state) navigate('/cart', { replace: true })
   }, []) // eslint-disable-line
 
   const checkedItems = (cartData?.items ?? []).filter(i => checkedIds.includes(itemKey(i)))
-  const orderName    = checkedItems.length > 1
-    ? `상품 외 ${checkedItems.length - 1}건`
-    : checkedItems.length === 1
+  const orderItems   = directItems ?? checkedItems
+  const orderName    = directOrderName
+    ?? (orderItems.length > 1
+    ? `상품 외 ${orderItems.length - 1}건`
+    : orderItems.length === 1
       ? '상품 1건'
-      : '주문 상품'
+      : '주문 상품')
 
   const [addrTab, setAddrTab]       = useState('direct')
   const [isAddrOpen, setIsAddrOpen] = useState(true)
@@ -231,7 +239,7 @@ export default function CheckoutPage() {
             <h2 className="text-[18px] font-black text-center text-[#111] tracking-tight mb-6">주문상품</h2>
             {checkedItems.length === 0
               ? <p className="text-center text-[#bbb] font-bold py-8">선택된 상품이 없습니다.</p>
-              : checkedItems.map(item => <OrderItemRow key={itemKey(item)} item={item} />)
+              : orderItems.map(item => <OrderItemRow key={itemKey(item)} item={item} />)
             }
             <div className="mt-5 flex justify-between items-center pt-4 border-t border-[#f5f5f5]">
               <span className="text-[14px] font-bold text-[#bbb]">배송비</span>
@@ -325,7 +333,7 @@ export default function CheckoutPage() {
 
             <button
               onClick={handlePayment}
-              disabled={!isWidgetReady || isPaying || checkedItems.length === 0}
+              disabled={!isWidgetReady || isPaying || orderItems.length === 0}
               className="w-full h-16 rounded-full bg-[#3ea76e] text-white font-black text-[17px] border-none cursor-pointer transition-all hover:bg-[#318a57] active:scale-[0.97] disabled:bg-[#eee] disabled:text-[#ccc] disabled:cursor-not-allowed tracking-tight"
             >
               {isPaying ? '처리 중...' : `${finalPayment.toLocaleString()}원 결제하기`}
